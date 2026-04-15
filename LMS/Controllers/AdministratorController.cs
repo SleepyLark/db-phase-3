@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using LMS.Models.LMSModels;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore.Query.SqlExpressions;
 
 // For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 [assembly: InternalsVisibleTo( "LMSControllerTests" )]
@@ -50,8 +51,30 @@ namespace LMS.Controllers
         /// false if the department already exists, true otherwise.</returns>
         public IActionResult CreateDepartment(string subject, string name)
         {
-            
-            return Json(new { success = false});
+            bool duplictate = false;
+            var query = from d in db.Departments
+                        where d.Subject == subject
+                        select d;
+
+            duplictate = query.Count() >= 1;
+
+            if(!duplictate)
+            {            
+                var newDepart = new Department
+                {
+                    Name = name,
+                    Subject = subject
+                };
+
+                db.Departments.Add(newDepart);
+
+                db.SaveChanges();
+                return Json(new { success = true });
+            }
+            else
+            {
+                return Json(new { success = false });
+            }
         }
 
 
