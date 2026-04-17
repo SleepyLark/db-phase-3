@@ -30,7 +30,6 @@ namespace LMS.Controllers
         /// <returns>The JSON array</returns>
         public IActionResult GetDepartments()
         {
-                        select d;
             var result = db.Departments
                 .OrderBy(d => d.Subject)
                 .Select(d => new
@@ -101,8 +100,8 @@ namespace LMS.Controllers
                 season = c.Season,
                 year = c.Year,
                 location = c.Location,
-                start = c.StartTime.ToString(),
-                end = c.EndTime.ToString(),
+                start = c.StartTime.ToString("HH:mm:ss"),
+                end = c.EndTime.ToString("HH:mm:ss"),
                 fname = p.FName,
                 lname = p.LName
             };
