@@ -59,7 +59,7 @@ namespace LMS.Controllers
             duplictate = query.Count() >= 1;
 
             if(!duplictate)
-            {            
+            {
                 var newDepart = new Department
                 {
                     Name = name,
@@ -88,8 +88,17 @@ namespace LMS.Controllers
         /// <returns>The JSON result</returns>
         public IActionResult GetCourses(string subject)
         {
-            
-            return Json(null);
+            var result = db.Courses
+                .Where(c => c.Department == subject)
+                .OrderBy(c => c.Number)
+                .Select(c => new
+                {
+                    number = c.Number,
+                    name = c.Name
+                })
+                .ToList();
+
+            return Json(result);
         }
 
         /// <summary>
@@ -103,9 +112,19 @@ namespace LMS.Controllers
         /// <returns>The JSON result</returns>
         public IActionResult GetProfessors(string subject)
         {
-            
-            return Json(null);
-            
+            var result = db.Professors
+                .Where(p => p.WorksIn == subject)
+                .OrderBy(p => p.LName)
+                .ThenBy(p => p.FName)
+                .Select(p => new
+                {
+                    lname = p.LName,
+                    fname = p.FName,
+                    uid = p.UId
+                })
+                .ToList();
+
+            return Json(result);
         }
 
 
@@ -120,8 +139,28 @@ namespace LMS.Controllers
         /// <returns>A JSON object containing {success = true/false}.
         /// false if the course already exists, true otherwise.</returns>
         public IActionResult CreateCourse(string subject, int number, string name)
-        {           
-            return Json(new { success = false });
+        {
+            // Check for existing course with same department + number
+            if (db.Courses.Any(c => c.Department == subject && c.Number == (uint)number))
+            {
+                return Json(new { success = false });
+            }
+
+            // Determine next CatalogId (CatalogId is the primary key)
+            uint nextCatalogId = db.Courses.Any() ? db.Courses.Max(c => c.CatalogId) + 1u : 1u;
+
+            var newCourse = new Course
+            {
+                CatalogId = nextCatalogId,
+                Number = (uint)number,
+                Name = name,
+                Department = subject
+            };
+
+            db.Courses.Add(newCourse);
+            db.SaveChanges();
+
+            return Json(new { success = true });
         }
 
 
@@ -143,8 +182,62 @@ namespace LMS.Controllers
         /// a Class offering of the same Course in the same Semester,
         /// true otherwise.</returns>
         public IActionResult CreateClass(string subject, int number, string season, int year, DateTime start, DateTime end, string location, string instructor)
-        {            
-            return Json(new { success = false});
+        {
+            var course = db.Courses
+                .FirstOrDefault(c => c.Department == subject && c.Number == (uint)number);
+
+            if (course == null)
+            {
+                return Json(new { success = false });
+            }
+
+            uint listing = course.CatalogId;
+            uint uYear = (uint)year;
+
+
+            bool classExists = db.Classes.Any(
+            c => c.Listing == listing 
+            && c.Season == season 
+            && c.Year == uYear);
+
+            if (classExists)
+            {
+                return Json(new { success = false });
+            }
+
+            // Convert times to TimeOnly for comparison with stored times
+            var newStart = TimeOnly.FromDateTime(start);
+            var newEnd = TimeOnly.FromDateTime(end);
+
+            // Check for location/time conflicts
+            bool locationConflict = db.Classes
+                .Where(c => c.Season == season && c.Year == uYear && c.Location == location)
+                .Any(c => (newStart < c.EndTime) && (c.StartTime < newEnd));
+
+            if (locationConflict)
+            {
+                return Json(new { success = false });
+            }
+
+            // Determine next ClassId
+            uint nextClassId = db.Classes.Any() ? db.Classes.Max(c => c.ClassId) + 1u : 1u;
+
+            var newClass = new Class
+            {
+                ClassId = nextClassId,
+                Season = season,
+                Year = uYear,
+                Location = location,
+                StartTime = newStart,
+                EndTime = newEnd,
+                Listing = listing,
+                TaughtBy = instructor
+            };
+
+            db.Classes.Add(newClass);
+            db.SaveChanges();
+
+            return Json(new { success = true});
         }
 
 

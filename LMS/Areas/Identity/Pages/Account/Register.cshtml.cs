@@ -239,11 +239,33 @@ namespace LMS.Areas.Identity.Pages.Account
                 return newUID;
         }
 
-        private static string createUID()
+        private string createUID()
         {
-            Random rand = new Random();
-            int uid = rand.Next(0, 10_000_000);
-            return uid.ToString("D7");
+            // Collect existing UIds from all user tables and find the max.
+            var uids = db.Administrators.Select(a => a.UId)
+                .Concat(db.Professors.Select(p => p.UId))
+                .Concat(db.Students.Select(s => s.UId))
+                .ToList();
+
+            int max = 0;
+            foreach (var u in uids)
+            {
+                if (string.IsNullOrEmpty(u)) 
+                    continue;
+                if (u.Length < 2) 
+                    continue;
+                if (u[0] != 'u' && u[0] != 'U') 
+                    continue;
+
+                var numPart = u.Substring(1);
+                if (int.TryParse(numPart, out int n))
+                {
+                    if (n > max) max = n;
+                }
+            }
+
+            int nextID = max + 1;
+            return nextID.ToString("D7");
         }
 
         /*******End code to modify********/

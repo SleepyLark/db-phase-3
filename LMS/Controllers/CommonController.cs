@@ -30,10 +30,17 @@ namespace LMS.Controllers
         /// <returns>The JSON array</returns>
         public IActionResult GetDepartments()
         {
-            var query = from d in db.Departments
                         select d;
+            var result = db.Departments
+                .OrderBy(d => d.Subject)
+                .Select(d => new
+                {
+                    name = d.Name,
+                    subject = d.Subject
+                })
+                .ToList();
 
-            return Json(query.ToList());
+            return Json(result);
         }
 
 
@@ -51,7 +58,20 @@ namespace LMS.Controllers
         /// <returns>The JSON array</returns>
         public IActionResult GetCatalog()
         {            
-            return Json(null);
+            var result = db.Departments
+                .OrderBy(d => d.Subject)
+                .Select(d => new
+                {
+                    subject = d.Subject,
+                    dname = d.Name,
+                    courses = d.Courses
+                    .OrderBy(c => c.Number)
+                    .Select(c => new { number = c.Number, cname = c.Name })
+                    .ToList()
+                })
+                .ToList();
+
+            return Json(result);
         }
 
         /// <summary>
@@ -69,8 +89,24 @@ namespace LMS.Controllers
         /// <param name="number">The course number, as in 5530</param>
         /// <returns>The JSON array</returns>
         public IActionResult GetClassOfferings(string subject, int number)
-        {            
-            return Json(null);
+        {
+            var result =
+            from c in db.Classes
+            join course in db.Courses on c.Listing equals course.CatalogId
+            join p in db.Professors on c.TaughtBy equals p.UId
+            where course.Department == subject && course.Number == (uint)number
+            orderby c.Year descending, c.Season
+            select new
+            {
+                season = c.Season,
+                year = c.Year,
+                location = c.Location,
+                start = c.StartTime.ToString(),
+                end = c.EndTime.ToString(),
+                fname = p.FName,
+                lname = p.LName
+            };
+            return Json(result.ToList());
         }
 
         /// <summary>
@@ -86,8 +122,23 @@ namespace LMS.Controllers
         /// <param name="asgname">The name of the assignment in the category</param>
         /// <returns>The assignment contents</returns>
         public IActionResult GetAssignmentContents(string subject, int num, string season, int year, string category, string asgname)
-        {            
-            return Content("");
+        {
+            var assignmentContents =
+                (from course in db.Courses
+                 join classOffering in db.Classes on course.CatalogId equals classOffering.Listing
+                 join assignmentCategory in db.AssignmentCategories on classOffering.ClassId equals assignmentCategory.InClass
+                 join assignment in db.Assignments on assignmentCategory.CategoryId equals assignment.Category
+                 where course.Department == subject
+                    && course.Number == (uint)num
+                    && classOffering.Season == season
+                    && classOffering.Year == (uint)year
+                    && assignmentCategory.Name == category
+                    && assignment.Name == asgname
+                 select assignment.Contents)
+                .FirstOrDefault();
+
+            return Content(assignmentContents ?? "");
+
         }
 
 
@@ -106,8 +157,24 @@ namespace LMS.Controllers
         /// <param name="uid">The uid of the student who submitted it</param>
         /// <returns>The submission text</returns>
         public IActionResult GetSubmissionText(string subject, int num, string season, int year, string category, string asgname, string uid)
-        {            
-            return Content("");
+        {
+            var submissionContents =
+                (from course in db.Courses
+                 join classOffering in db.Classes on course.CatalogId equals classOffering.Listing
+                 join assignmentCategory in db.AssignmentCategories on classOffering.ClassId equals assignmentCategory.InClass
+                 join assignment in db.Assignments on assignmentCategory.CategoryId equals assignment.Category
+                 join submission in db.Submissions on assignment.AssignmentId equals submission.Assignment
+                 where course.Department == subject
+                    && course.Number == (uint)num
+                    && classOffering.Season == season
+                    && classOffering.Year == (uint)year
+                    && assignmentCategory.Name == category
+                    && assignment.Name == asgname
+                    && submission.Student == uid
+                 select submission.SubmissionContents)
+                .FirstOrDefault();
+
+            return Content(submissionContents ?? "");
         }
 
 
@@ -128,7 +195,62 @@ namespace LMS.Controllers
         /// or an object containing {success: false} if the user doesn't exist
         /// </returns>
         public IActionResult GetUser(string uid)
-        {           
+        {
+            // Check if the user is a Student
+            var student =
+                (from s in db.Students
+                 join d in db.Departments on s.Major equals d.Subject
+                 where s.UId == uid
+                 select new
+                 {
+                     fname = s.FName,
+                     lname = s.LName,
+                     uid = s.UId,
+                     department = d.Name
+                 })
+                .FirstOrDefault();
+
+            if (student != null)
+            {
+                return Json(student);
+            }
+
+            // Check if the user is a Professor
+            var professor =
+                (from p in db.Professors
+                 join d in db.Departments on p.WorksIn equals d.Subject
+                 where p.UId == uid
+                 select new
+                 {
+                     fname = p.FName,
+                     lname = p.LName,
+                     uid = p.UId,
+                     department = d.Name
+                 })
+                .FirstOrDefault();
+
+            if (professor != null)
+            {
+                return Json(professor);
+            }
+
+            // Check if the user is an Administrator
+            var administrator =
+                (from a in db.Administrators
+                 where a.UId == uid
+                 select new
+                 {
+                     fname = a.FName,
+                     lname = a.LName,
+                     uid = a.UId
+                 })
+                .FirstOrDefault();
+
+            if (administrator != null)
+            {
+                return Json(administrator);
+            }
+
             return Json(new { success = false });
         }
 
