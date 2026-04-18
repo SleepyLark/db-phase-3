@@ -419,6 +419,7 @@ namespace LMS_CustomIdentity.Controllers
 
             // Update the score
             result.Submission.Score = (uint)score;
+            db.SaveChanges();
 
             // Recalculate this specific student's grade
             UpdateGrade(uid, result.ClassId);
@@ -460,7 +461,7 @@ namespace LMS_CustomIdentity.Controllers
                     continue;
 
                 double maxPointsInCategory = assignments.Sum(a => (double)a.MaxPoints);
-                double totalPointsEarned = 0.0;
+                double totalPointsEarned = assignments.Sum(a => (double)a.Score); 
 
                 // percentage for the category (earned / max)
                 double categoryPercentage = maxPointsInCategory > 0 ? totalPointsEarned / maxPointsInCategory : 0;
@@ -481,6 +482,12 @@ namespace LMS_CustomIdentity.Controllers
 
             // convert percentage to letter grade
             string letterGrade = PercentToLetter(finalPercentage);
+
+            if(totalActiveWeight == 0)
+            {
+                // no assignments to grade yet
+                letterGrade = "--";
+            }
 
             // update letter grade in DB
             var enrollment = db.Enrolleds.FirstOrDefault(e => e.Class == classId && e.Student == uid);
